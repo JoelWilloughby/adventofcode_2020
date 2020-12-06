@@ -2,9 +2,6 @@ use std::io::BufRead;
 use regex::Regex;
 use lazy_static::lazy_static;
 
-lazy_static! {
-    static ref PAIR_RE: Regex = Regex::new(r"([a-z]+:\S+)").unwrap();
-}
 
 #[derive(Debug)]
 struct CheckedString {
@@ -13,7 +10,7 @@ struct CheckedString {
 }
 
 #[derive(Debug)]
-struct Id {
+pub struct Id {
     byr: Option<CheckedString>,
     iyr: Option<CheckedString>,
     eyr: Option<CheckedString>,
@@ -58,9 +55,7 @@ fn valid_height(input: &str) -> CheckedString {
                 _ => false,
             }
         },
-        None => {
-            false
-        }
+        None => false, 
     };
     CheckedString {
         value: String::from(input),
@@ -113,14 +108,7 @@ fn check_entry(entry: &Option<CheckedString>) -> bool {
 impl Id {
     fn new() -> Self {
         Self {
-            byr: None,
-            iyr: None,
-            eyr: None,
-            hgt: None,
-            hcl: None,
-            ecl: None,
-            pid: None,
-            cid: None,
+            byr: None, iyr: None, eyr: None, hgt: None, hcl: None, ecl: None, pid: None, cid: None,
         }
     }
 
@@ -139,37 +127,33 @@ impl Id {
     }
 
     fn read_helper<R: BufRead>(line: &str, reader: &mut R) -> Self {
+        lazy_static! {
+            static ref PAIR_RE: Regex = Regex::new(r"([a-z]+:\S+)").unwrap();
+        }
         let mut temp = Self::new();
-        let mut iter = reader.lines();
-        let mut current = String::from(line);
         
-        loop {
-            for cap in PAIR_RE.captures_iter(&current) {
-                let strs: Vec<&str> = cap[0].split(':').collect();
-                temp.set_item(strs[0], strs[1]);
-            }
+        for cap in PAIR_RE.captures_iter(line) {
+            let strs: Vec<&str> = cap[0].split(':').collect();
+            temp.set_item(strs[0], strs[1]);
+        }
 
-            match iter.next() {
-                Some(thing) => {
-                    match thing {
-                        Err(_) => {
-                            break;
-                        },
-                        Ok(li) => {
-                            if li.len() == 0 {
-                                break;
-                            }
-
-                            current = String::from(li);
-                        }
-                    }
-                },
-                None => {
+        for thing in reader.lines() {
+            match thing {
+                Err(_) => {
                     break;
+                },
+                Ok(li) => {
+                    if li.len() == 0 {
+                        break;
+                    }
+                    
+                    for cap in PAIR_RE.captures_iter(&li) {
+                        let strs: Vec<&str> = cap[0].split(':').collect();
+                        temp.set_item(strs[0], strs[1]);
+                    }
                 }
             }
         }
-
         temp
     }
 
@@ -178,15 +162,14 @@ impl Id {
             match line {
                 Ok(li) => {
                     if li.len() > 0 {
-                        return Some(Self::read_helper(&li, reader));
+                        return Some(Self::read_helper(&li, reader))
                     } 
                 },
                 Err(_) => {
-                    return None;
+                    return None
                 }
             }
         }
-
         None
     }
 
@@ -226,14 +209,12 @@ mod tests {    use super::*;
                     break;
                 },
                 Some(id) => {
-                    let valid = id.check_valid();
                     if id.check_valid() {
                         valid_count += 1;
                     } 
                     if id.check_present() {
                         present_count += 1;
                     }
-
                     ids.push(id);
                 }
             }
