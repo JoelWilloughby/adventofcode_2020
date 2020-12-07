@@ -9,6 +9,12 @@ impl Group {
         Self { any: 0, all: !0 }
     }
 
+    pub fn from_line(line: &str) -> Self {
+        let mut g = Self::new();
+        g.read_line(line);
+        g
+    }
+
     pub fn read_line(&mut self, line: &str) {
         let bytes = String::from(line).into_bytes();
 
@@ -26,37 +32,33 @@ impl Group {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
-    use std::io::{BufReader, BufRead};
 
     fn drive(filename: &str) {
-        let file = File::open(filename).unwrap();
-        let reader = BufReader::new(file);
+        let file = std::fs::read_to_string(filename).unwrap();
 
-        let mut group = Group::new();
-        let mut working = false;
+        let mut group: Option<Group> = None;
         let mut any_sum = 0;
         let mut all_sum = 0;
-        for line in reader.lines() {
-            match line {
-                Err(_) => (),
-                Ok(li) => {
-                    if working && li.len() == 0 {
-                        working = false;
-                        any_sum += group.any.count_ones();
-                        all_sum += group.all.count_ones();
-                        group = Group::new();
-                    } else if li.len() > 0 {
-                        working = true;
-                        group.read_line(&li);
-                    }
+        for li in file.lines() {
+            if li.len() > 0 {
+                match group {
+                    None => { 
+                        group = Some(Group::from_line(li)); 
+                    },
+                    Some(ref mut g) => { 
+                        g.read_line(&li); 
+                    },
                 }
+            } else if let Some(g) = group {
+                any_sum += g.any.count_ones();
+                all_sum += g.all.count_ones();
+                group = None;
             }
         }
 
-        if working {
-            any_sum += group.any.count_ones();
-            all_sum += group.all.count_ones();
+        if let Some(g) = group {
+            any_sum += g.any.count_ones();
+            all_sum += g.all.count_ones();
         }
 
         println!("Anybody is {}, Allbody is {}", any_sum, all_sum);
