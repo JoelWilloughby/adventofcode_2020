@@ -1,6 +1,6 @@
 
-fn read_line(line: &str) -> usize {
-    let bytes = String::from(line).into_bytes();
+pub fn read_line(line: &str) -> usize {
+    let bytes = line.bytes();
     assert_eq!(bytes.len(), 10);
 
     let mut val: usize = 0;
@@ -17,27 +17,22 @@ fn read_line(line: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
-    use std::io::{BufReader, BufRead};
 
     fn drive(filename: &str) {
-        let file = File::open(filename).unwrap();
-        let mut reader = BufReader::new(file);
+        let file = std::fs::read_to_string(filename).unwrap();
 
         let mut max = 0;
-        let mut seats = [false; 0x3ff];
-        for line in reader.lines() {
-            let li = line.unwrap();
-            let temp = read_line(&li);
-            println!("{:?} -> {:b} = {}", li, temp, temp);
-            if temp > max {
-                max = temp;
+        let mut seat_field = [false; 0x3ff];
+        let seats = file.lines().map(|line| read_line(line)).collect::<Vec<usize>>();
+        for seat in seats {
+            if seat > max {
+                max = seat;
             }
-            seats[temp] = true;
+            seat_field[seat] = true;
         }
 
         let mut down = max;
-        while seats[down] {
+        while seat_field[down] {
             down -= 1;
         }
 
