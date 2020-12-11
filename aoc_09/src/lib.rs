@@ -59,8 +59,8 @@ pub fn do_it_2(nums: &Vec<usize>, target: usize) -> Option<usize> {
     
     Some(
         // Lol
-        nums.iter().skip(low).take(high - low + 1).min().unwrap() + 
-        nums.iter().skip(low).take(high - low + 1).max().unwrap() 
+        nums[low..=high].iter().min().unwrap() + 
+        nums[low..=high].iter().max().unwrap() 
     )
 }
 
