@@ -1,8 +1,10 @@
+use std::collections::HashSet;
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 enum Spot {
-    Empty,
+    Settled,
+    Unoccupied,
     Occupied,
     Blank,
 }
@@ -10,6 +12,7 @@ enum Spot {
 #[derive(Debug)]
 pub struct Board {
     cells: Vec<Vec<Spot>>,
+    open_cells: HashSet<(usize, usize)>,
     can_see: Vec<Vec<Vec<(usize, usize)>>>,
 }
 
@@ -17,9 +20,10 @@ pub struct Board {
 impl fmt::Display for Spot {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Empty => write!(f, "L"),
+            Self::Unoccupied => write!(f, "L"),
             Self::Blank => write!(f, "."),
             Self::Occupied => write!(f, "#"),
+            Self::Settled => write!(f, "X"),
         }
     }
 
@@ -42,7 +46,7 @@ impl fmt::Display for Board {
 fn read_line(line: &str) -> Vec<Spot> {
     line.bytes().map(|b| 
         match b as char {
-            'L' => Spot::Empty,
+            'L' => Spot::Unoccupied,
             _ => Spot::Blank, 
             })
     .collect()
@@ -73,7 +77,7 @@ fn pad(v: Vec<Vec<Spot>>) -> Vec<Vec<Spot>> {
 fn count_around(v: &Vec<Vec<Spot>>, can_see: &Vec<(usize, usize)>) -> usize {
     can_see.iter().fold(0, |acc, &(r, c)| {
         acc + match v[r][c] {
-            Spot::Occupied => 1,
+            Spot::Occupied | Spot::Settled => 1,
             _ => 0,
         }
     })
@@ -101,11 +105,12 @@ impl Board {
         // Initialize can_see. By default, this is just all the space
         // directly adjacent (including diagonal) to a node
         let mut can_see = vec![];
+        let mut open_cells = HashSet::new();
         for r in 0..cells.len() {
             let mut temp = vec![];
             for c in 0..cells[0].len() {
                 match cells[r][c] {
-                    Spot::Empty => {
+                    Spot::Unoccupied => {
                         temp.push(vec![
                             (r-1, c-1), (r-1, c), (r-1, c+1),
                             (r, c-1), (r, c+1),
@@ -116,24 +121,63 @@ impl Board {
                         temp.push(vec![]);
                     },
                 }
+                open_cells.insert((r, c));
             }
             can_see.push(temp);
         }
 
-        Some(Self { cells, can_see })
+        Some(Self { cells, can_see, open_cells })
     }
 
-    // Check to see if the board changed. Use by step
-    fn was_changed(&self, last_time: Vec<Vec<Spot>>) -> bool {
-        for r in 0..self.cells.len() {
-            for c in 0..self.cells[r].len() {
-                if self.cells[r][c] != last_time[r][c] {
-                    return true;
-                }
+    fn clear_dones(&mut self) {
+        for &(r, c) in self.open_cells.clone().iter() {
+            match self.cells[r][c] {
+                Spot::Settled | Spot::Blank => {
+                    self.open_cells.remove(&(r,c));
+                },
+                _ => (),
+            }
+        }
+    }
+
+    fn set_settled(&mut self, num: usize) {
+        // Set blanks
+        for &(r, c) in self.open_cells.iter() {
+            match self.cells[r][c] {
+                Spot::Unoccupied => (),
+                _ => {continue;},
+            }
+            for &(seen_r, seen_c) in self.can_see[r][c].iter() {
+                // If there is at least on settled seat adjacent to a
+                // unoccupied seat, it will never become occupied.
+                match self.cells[seen_r][seen_c] {
+                    Spot::Settled => {
+                        self.cells[r][c] = Spot::Blank;
+                    },
+                    _ => (),
+                }    
             }
         }
 
-        false
+        for &(r, c) in self.open_cells.iter() {
+            match self.cells[r][c] {
+                Spot::Occupied => (),
+                _ => {continue;},
+            }
+
+            let seat_count = self.can_see[r][c].iter().fold(0, |acc, &(x,y)| {
+                acc + match self.cells[x][y] {
+                    Spot::Blank => 0,
+                    _ => 1,
+                }
+            });
+
+            // If a seat is occupied and there are not enough seats around it
+            // to ever trigger the unoccupancy, settle it.
+            if seat_count < num {
+                self.cells[r][c] = Spot::Settled;
+            }
+        }
     }
 
     // Steps the board according to the given instructions. Makes
@@ -143,28 +187,27 @@ impl Board {
     // becomes occupied.
     pub fn step(&mut self, num: usize) -> bool {
         let last_time = self.cells.clone();
-
-        for r in 1..(self.cells.len()-1) {
-            for c in 1..(self.cells[r].len()-1) {
-                let surround_count = count_around(&last_time, &self.can_see[r][c]);
-                match last_time[r][c] {
-                    Spot::Occupied => {
-                        if surround_count >= num {
-                            self.cells[r][c] = Spot::Empty;
-                        }
-                    },
-                    Spot::Empty => {
-                        if surround_count == 0 {
-                            self.cells[r][c] = Spot::Occupied;
-                        }
+        for &(r, c) in self.open_cells.iter() {
+            let surround_count = count_around(&last_time, &self.can_see[r][c]);
+            match last_time[r][c] {
+                Spot::Occupied => {
+                    if surround_count >= num {
+                        self.cells[r][c] = Spot::Unoccupied;
                     }
-                    _ => (),
-                }
+                },
+                Spot::Unoccupied => {
+                    if surround_count == 0 {
+                        self.cells[r][c] = Spot::Occupied;
+                    }
+                },
+                _ => (),
             }
         }
 
-        // Return whether or not something changed
-        self.was_changed(last_time)
+        self.set_settled(num);
+        self.clear_dones();
+
+        self.open_cells.len() > 0
     }
 
     // Counts the number of occupied seats on the board
@@ -174,7 +217,7 @@ impl Board {
             accum += row.iter()
                 .fold(0, |acc, c| {
                     acc + match c {
-                        Spot::Occupied => 1,
+                        Spot::Occupied | Spot::Settled => 1,
                         _ => 0,
                     }
                 })
@@ -185,15 +228,19 @@ impl Board {
 
     // Resets all the seats to unoccupied
     pub fn reset(&mut self) {
+        self.open_cells.clear();
         for r in 0..self.cells.len() {
             for c in 0..self.cells[r].len() {
                 self.cells[r][c] = match self.cells[r][c] {
-                    Spot::Occupied => Spot::Empty,
-                    Spot::Empty => Spot::Empty,
+                    Spot::Occupied => Spot::Unoccupied,
+                    Spot::Unoccupied => Spot::Unoccupied,
                     Spot::Blank => Spot::Blank,
-                }
+                    Spot::Settled => Spot::Unoccupied,
+                };
+                self.open_cells.insert((r,c));
             }
         }
+        self.clear_dones();
     }
 
     // Sets the as seen vector for a given seat. Traverses as 
@@ -211,7 +258,7 @@ impl Board {
             let mut curr_c = (c as isize + dir_y) as usize;
             while curr_r < self.cells.len() && curr_c < self.cells[0].len() {
                 match self.cells[curr_r][curr_c] {
-                    Spot::Empty => {
+                    Spot::Unoccupied => {
                         as_seen.push((curr_r, curr_c));
                         break;
                     },
@@ -243,13 +290,19 @@ mod tests {
 
     fn drive(filename: &str) {
         let input = std::fs::read_to_string(filename).unwrap();
-        let mut board = Board::from_input(input).unwrap();
+        let mut board = Board::from_input(input.clone()).unwrap();
 
+        board.reset();
+        // println!("{}", board);
         while board.step(4) {
+            // println!("{}", board);
+            // std::thread::sleep(std::time::Duration::from_millis(100));
         }
         println!("{}", board.count());
 
+        let mut board = Board::from_input(input.clone()).unwrap();
         board.prep_part_2();
+        // println!("{}", board);
         while board.step(5) {
             // println!("{}", board);
             // std::thread::sleep(std::time::Duration::from_millis(100));
