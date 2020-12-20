@@ -16,11 +16,4 @@ pub mod aoc_15;
 pub mod aoc_16;
 pub mod aoc_17;
 pub mod aoc_18;
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-
-    }
-}
+pub mod aoc_19;
