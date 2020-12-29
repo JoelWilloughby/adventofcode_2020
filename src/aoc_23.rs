@@ -73,15 +73,6 @@ impl Cups {
 
         self.head = self.next_list[self.head];
     }
-
-    pub fn find(&self, val: usize) -> usize {
-        for (i, v) in self.next_list.iter().enumerate() {
-            if *v == val {
-                return i;
-            }
-        }
-        0
-    }
 }
 
 #[cfg(test)]
@@ -102,8 +93,7 @@ mod tests {
         for _ in 0..10000000 {
             cups.turn();
         }
-        let one_index = cups.find(1);
-        let v1 = cups.next_list[cups.next_list[one_index]];
+        let v1 = cups.next_list[1];
         let v2 = cups.next_list[v1];
         println!("After 10000000: {} {} {}", v1, v2, v1 * v2);
     }
