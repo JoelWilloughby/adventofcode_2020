@@ -65,14 +65,10 @@ impl Tile {
         Self {
             id,
             sides: [
-                left,
-                shift_reverse(left),
-                up,
-                shift_reverse(up),
-                right,
-                shift_reverse(right),
-                down,
-                shift_reverse(down),
+                left, shift_reverse(left),
+                up, shift_reverse(up),
+                right, shift_reverse(right),
+                down, shift_reverse(down),
             ],
             content,
             flipped_cols: false,
@@ -118,9 +114,7 @@ impl Tile {
             j = self.content[0].len() - j - 1;
         }
         if self.inverted {
-            let temp = i;
-            i = j;
-            j = temp;
+            std::mem::swap(&mut i, &mut j)
         }
 
         (i, j)
@@ -131,44 +125,29 @@ impl Tile {
         self.content[i][j]
     }
 
-    fn assert_oriented(&self, other: &Self) -> bool {
-        for i in 0..10 {
-            if self.get_oriented(0, i) != other.get_oriented(0, i) {
-                return false;
-            }
-            if self.get_oriented(i, 0) != other.get_oriented(i, 0) {
-                return false;
-            }
-            if self.get_oriented(9-i, i) != other.get_oriented(9-i, i) {
-                return false;
-            }
-            if self.get_oriented(i, 9-i) != other.get_oriented(i, 9-i) {
-                return false;
-            }
-        }
-        true
+    fn is_oriented(&self, other: &Self, target_dir: usize) -> bool {
+        (0..10).all(|j| match target_dir {
+            0 => self.get_oriented(j, 0) == other.get_oriented(j, 9),
+            1 => self.get_oriented(0, j) == other.get_oriented(9, j),
+            2 => self.get_oriented(j, 9) == other.get_oriented(j, 0),
+            3 => self.get_oriented(9, j) == other.get_oriented(0, j),
+            _ => false,
+        })
     }
 
     pub fn orient_to(&mut self, other: &Self, dir: usize) -> bool {
         assert!(other.oriented);
-        if self.oriented {
-            return self.assert_oriented(other);
-        }
-
         let target_idx = (dir+2) % 4;
+        if self.oriented {
+            return self.is_oriented(other, target_idx);
+        }
 
         for i in 0..8 {
             self.flipped_cols = i & 0x01 != 0;
             self.flipped_rows = i & 0x02 != 0;
             self.inverted = i & 0x04 != 0;
 
-            if (0..10).all(|j| match target_idx {
-                0 => self.get_oriented(j, 0) == other.get_oriented(j, 9),
-                1 => self.get_oriented(0, j) == other.get_oriented(9, j),
-                2 => self.get_oriented(j, 9) == other.get_oriented(j, 0),
-                3 => self.get_oriented(9, j) == other.get_oriented(0, j),
-                _ => false,
-            }) {
+            if self.is_oriented(other, target_idx) {
                 self.oriented = true;
                 return true;
             }
@@ -184,7 +163,6 @@ pub fn doit(tiles: &Vec<Tile>) -> HashMap<usize, HashSet<usize>> {
         for i in 0..8 {
             assocs[tile.sides[i]].push(idx);
         }
-
     }
 
     let mut mingle: HashMap<usize, HashSet<usize>> = HashMap::new();
@@ -296,9 +274,7 @@ impl Board {
             }
         }
 
-        Self {
-            grid
-        }
+        Self { grid }
     }
 
     pub fn search_350(&self) -> HashSet<(usize, usize)> {
@@ -314,12 +290,12 @@ impl Board {
             ];
         );
 
-        // Dimensions are 3x20
         let mut count = vec![vec![]; 8];
         for i in 0..self.grid.len() {
             for j in 0..self.grid.len() {
                 for k in 0..8 {
                     if INDICES.iter().all(|(mut li, mut lj)| {
+                        // Dimensions are 3x20
                         if k & 1 != 0 {
                             li = 2 - li;
                         }
@@ -444,15 +420,13 @@ mod tests {
                     }
                     if control & 0x04 != 0 {
                         // Flip i and j directions
-                        let temp = i;
-                        i = j;
-                        j = temp;
+                        std::mem::swap(&mut i, &mut j);
                     }
                     print!("{:02} ", input[i][j]);
                 }
-                println!("");
+                println!();
             }
-            println!("");
+            println!();
         }
     }
 
